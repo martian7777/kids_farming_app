@@ -1,0 +1,16 @@
+{
+  "appId": "com.cozyfarm.kids",
+  "appName": "Cozy Farm",
+  "webDir": "dist",
+  "backgroundColor": "#bfe6ff",
+  "android": {
+    "backgroundColor": "#bfe6ff"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#bfe6ff",
+      "showSpinner": false
+    }
+  }
+}
