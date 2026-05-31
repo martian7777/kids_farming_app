@@ -69,9 +69,28 @@ export const UPGRADES = {
   fastseed: { id: 'fastseed', name: 'Magic Seeds', emoji: '✨', cost: 120, desc: 'Crops grow 25% faster.', owned: false },
 };
 
+// ---- Animal definitions ----------------------------------------------
+export const ANIMAL_TYPES = {
+  chicken: {
+    id: 'chicken', name: 'Fluffy Chicken', emoji: '🐔', productEmoji: '🥚', productName: 'Egg',
+    cost: 150, feedCost: 5, reward: 15, xp: 10, growTime: 6, unlockLevel: 1,
+    fact: 'Chickens cluck and lay eggs for breakfast!',
+  },
+  sheep: {
+    id: 'sheep', name: 'Wooly Sheep', emoji: '🐑', productEmoji: '🧶', productName: 'Wool',
+    cost: 350, feedCost: 15, reward: 45, xp: 25, growTime: 12, unlockLevel: 2,
+    fact: 'Sheep wool is sheared to make warm sweaters!',
+  },
+  cow: {
+    id: 'cow', name: 'Cozy Cow', emoji: '🐄', productEmoji: '🥛', productName: 'Milk',
+    cost: 600, feedCost: 30, reward: 90, xp: 50, growTime: 18, unlockLevel: 3,
+    fact: 'Cows eat grass and make delicious, fresh milk!',
+  },
+};
+
 function defaultState() {
   return {
-    coins: 30,
+    coins: 1000,
     xp: 0,
     level: 1,
     day: 1,
@@ -82,6 +101,7 @@ function defaultState() {
     activeSeed: 'wheat',
     vehicles: { foot: true, quad: false, tractor: false, truck: false },
     upgrades: { bigtank: false, sprinkler: false, fastseed: false },
+    animals: { chicken: 0, sheep: 0, cow: 0 },
     lessons: {},            // lessonId -> { completed:true, medal:'gold'|'silver' }
     stats: { planted: 0, harvested: 0, watered: 0, lessonsDone: 0 },
   };

@@ -24,18 +24,96 @@
     <p id="loader-text" class="text-white/90 font-semibold">Waking up the chickens…</p>
   </div>
 
-  <!-- ===================== START MENU ===================== -->
-  <div id="start-menu" class="screen-overlay hidden flex-col items-center justify-center gap-7 bg-gradient-to-b from-farm-sky to-farm-grass/60">
-    <div class="text-center animate-pop">
-      <div class="text-8xl animate-floaty">🌻</div>
-      <h1 class="font-display text-5xl text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.15)] mt-2">Cozy Farm</h1>
-      <p class="font-display text-xl text-white/95 mt-1">Plant • Grow • Learn!</p>
+  <!-- ===================== START MENU (LANDING PAGE) ===================== -->
+  <div id="start-menu" class="screen-overlay hidden flex-col bg-gradient-to-b from-black/10 via-black/20 to-farm-grass/50 overflow-y-auto scrollbar-none z-50">
+    <!-- Navigation Bar -->
+    <nav class="w-full max-w-6xl mx-auto px-6 py-4 flex justify-between items-center z-10 shrink-0">
+      <div class="flex items-center gap-2 font-display text-2xl md:text-3xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+        <span class="animate-floaty inline-block">🌻</span>
+        <span class="font-bold">Cozy Farm</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="btn-mute-menu" class="btn-chunky bg-white/20 backdrop-blur-md text-white text-sm px-4 py-2 border-none">🔊 Sound</button>
+        <button id="btn-play-nav" class="btn-chunky bg-farm-leaf text-white text-sm px-5 py-2 hover:scale-105 transition-all">Play Now 🚜</button>
+      </div>
+    </nav>
+
+    <!-- Hero Content -->
+    <div class="flex-1 w-full max-w-5xl mx-auto px-6 py-8 md:py-16 flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 z-10 text-white shrink-0">
+      <!-- Left Hero Text -->
+      <div class="flex-1 text-center md:text-left flex flex-col gap-4 animate-pop">
+        <div class="inline-flex self-center md:self-start items-center gap-2 bg-white/25 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase text-farm-sun shadow-soft border border-white/10">
+          <span>✨</span> Beautiful 3D Learning Game
+        </div>
+        <h1 class="font-display text-4xl md:text-6xl leading-tight drop-shadow-[0_4px_8px_rgba(0,0,0,0.25)]">
+          Your Cozy 3D Farm <br/>
+          <span class="text-farm-sun drop-shadow-md">Adventure Awaits!</span>
+        </h1>
+        <p class="text-base md:text-lg text-white/95 font-medium max-w-lg drop-shadow-[0_1px_3px_rgba(0,0,0,0.2)] leading-relaxed">
+          Step into a colorful 3D world! Plant sweet crops, adopt cute animals, drive heavy tractors, and complete fun science quizzes to become a master farmer!
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 mt-4 justify-center md:justify-start">
+          <button id="btn-play" class="btn-chunky bg-farm-leaf text-white text-xl px-10 py-4 hover:scale-105 transition-all shadow-lg animate-bounce">
+            Start Farming! 🚜
+          </button>
+          <button id="btn-howto" class="btn-chunky bg-white text-slate-800 text-lg px-6 py-4 hover:scale-102 transition-all">
+            ❓ How to Play
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Hero Card -->
+      <div class="w-full max-w-sm bg-white/15 backdrop-blur-lg border border-white/25 rounded-chunky p-6 shadow-chunky flex flex-col items-center text-center gap-4 animate-floaty">
+        <div class="text-7xl animate-pulse">🐄</div>
+        <h2 class="font-display text-2xl text-farm-sun drop-shadow-sm">Meet Cozy Animals!</h2>
+        <p class="text-sm text-white/90 leading-relaxed font-semibold">
+          Adopt fluffy chickens, wooly sheep, and cozy cows! Feed them and collect eggs, wool, and fresh milk. 🥛
+        </p>
+        <div class="flex flex-wrap gap-2 justify-center">
+          <span class="bg-white/15 px-3 py-1 rounded-full text-xs font-bold">🐔 Chickens</span>
+          <span class="bg-white/15 px-3 py-1 rounded-full text-xs font-bold">🐑 Sheep</span>
+          <span class="bg-white/15 px-3 py-1 rounded-full text-xs font-bold">🐄 Cows</span>
+        </div>
+      </div>
     </div>
-    <button id="btn-play" class="btn-chunky bg-farm-leaf text-white text-2xl px-10 py-4">▶ Play</button>
-    <div class="flex gap-3">
-      <button id="btn-howto" class="btn-chunky bg-white text-slate-700 text-lg px-6 py-3">❓ How to Play</button>
-      <button id="btn-mute-menu" class="btn-chunky bg-white text-slate-700 text-lg px-6 py-3">🔊 Sound</button>
+
+    <!-- Features Section -->
+    <div class="w-full bg-white/95 backdrop-blur-md text-slate-800 py-16 px-6 z-10 mt-12 shrink-0">
+      <div class="max-w-6xl mx-auto flex flex-col gap-10">
+        <div class="text-center">
+          <h2 class="font-display text-3xl md:text-4xl text-farm-leaf">Amazing Farm Features</h2>
+          <p class="text-slate-500 font-semibold mt-1">Everything you need to run your dream country farm!</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+          <div class="bg-slate-50 rounded-chunky p-6 border-2 border-slate-100 flex flex-col items-center text-center gap-2 hover:shadow-soft transition duration-300">
+            <div class="text-4xl animate-floaty">🌾</div>
+            <h3 class="font-display text-xl text-slate-700">Cultivate Crops</h3>
+            <p class="text-sm text-slate-500">Till soil, plant carrots, wheat, and magic seeds. Keep them watered to harvest bumper crops!</p>
+          </div>
+          <div class="bg-slate-50 rounded-chunky p-6 border-2 border-slate-100 flex flex-col items-center text-center gap-2 hover:shadow-soft transition duration-300">
+            <div class="text-4xl animate-floaty" style="animation-delay: 0.5s">🐔</div>
+            <h3 class="font-display text-xl text-slate-700">Raise Cute Animals</h3>
+            <p class="text-sm text-slate-500">Adopt fluffy chickens, wooly sheep, and cozy cows. Feed them to collect eggs, wool, and fresh milk!</p>
+          </div>
+          <div class="bg-slate-50 rounded-chunky p-6 border-2 border-slate-100 flex flex-col items-center text-center gap-2 hover:shadow-soft transition duration-300">
+            <div class="text-4xl animate-floaty" style="animation-delay: 1s">🚜</div>
+            <h3 class="font-display text-xl text-slate-700">Cool Vehicles</h3>
+            <p class="text-sm text-slate-500">Unlock quad bikes, seed-planting tractors, and utility trucks that automatically harvest ripe plants!</p>
+          </div>
+          <div class="bg-slate-50 rounded-chunky p-6 border-2 border-slate-100 flex flex-col items-center text-center gap-2 hover:shadow-soft transition duration-300">
+            <div class="text-4xl animate-floaty" style="animation-delay: 1.5s">🎓</div>
+            <h3 class="font-display text-xl text-slate-700">Farming Academy</h3>
+            <p class="text-sm text-slate-500">Finish lesson slide-shows and answer quiz questions to test your knowledge and earn golden medals!</p>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="w-full bg-slate-800 text-slate-400 py-6 text-center text-xs z-10 shrink-0">
+      <p class="mb-1">© 2026 Cozy Farm Learning Adventure. Built for curious young minds. 🌻</p>
+      <p>Made with love, HTML5, Tailwind CSS, and Three.js</p>
+    </footer>
   </div>
 
   <!-- ===================== TOP HUD ===================== -->

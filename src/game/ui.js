@@ -1,12 +1,13 @@
 // =============================================================
 //  ui.js — HUD, joystick, toolbar, dialogs (academy/garage/shop)
 // =============================================================
-import { store, CROPS, VEHICLES, UPGRADES, xpForLevel } from './state.js';
+import { store, CROPS, VEHICLES, UPGRADES, xpForLevel, ANIMAL_TYPES } from './state.js';
 import { audio } from './audio.js';
 import { LESSONS } from './lessons.js';
 import {
   setVehicle, getActiveTile, tillTile, plantTile, waterTile, harvestTile,
-  isOnMat, isNearWell, setMorning, phaseLabel, scene,
+  isOnMat, isNearWell, setMorning, phaseLabel, scene, feedAnimal, collectProduct,
+  syncAnimals
 } from './three_scene.js';
 
 const $ = (id) => document.getElementById(id);
@@ -123,6 +124,20 @@ function showLevelUp(level) {
 // ---------------------------------------------------------------
 //  Core actions
 // ---------------------------------------------------------------
+function getClosestAnimal() {
+  if (!scene.player || !scene.animals) return null;
+  const p = scene.player.position;
+  let best = null, bestD = 2.0 * 2.0; // within 2 units
+  scene.animals.forEach(a => {
+    const dist = p.distanceTo(a.mesh.position);
+    if (dist < bestD) {
+      bestD = dist;
+      best = a;
+    }
+  });
+  return best;
+}
+
 function doAct() {
   if (anyDialogOpen()) return;
   const st = store.state;
@@ -133,6 +148,32 @@ function doAct() {
   if (isNearWell()) { store.refillWater(); audio.water(); toast('Water tank refilled!', '💧'); return; }
 
   if (st.activeVehicle !== 'foot') { toast('Hop off to farm by hand!', '👟'); return; }
+
+  // Check closest animal
+  const animal = getClosestAnimal();
+  if (animal) {
+    if (animal.state === 'hungry') {
+      const def = ANIMAL_TYPES[animal.type];
+      if (feedAnimal(animal)) {
+        audio.plant();
+        toast(`Feeding ${def.name}! 🌾`, '🌾', 1200);
+        syncHud();
+      } else {
+        toast('Not enough coins for feed!', '🪙');
+      }
+      return;
+    } else if (animal.state === 'ready') {
+      const def = collectProduct(animal);
+      if (def) {
+        audio.harvest();
+        toast(`Collected ${def.productEmoji} ${def.productName}! +${def.reward}🪙`, '🎉');
+        syncHud();
+      }
+      return;
+    } else if (animal.state === 'eating') {
+      return;
+    }
+  }
 
   const t = getActiveTile();
   if (!t) { toast('Stand next to a soil tile!', '🟫'); return; }
@@ -229,33 +270,101 @@ function closeAll() { DIALOGS.forEach(closeDialog); }
 // ---------------------------------------------------------------
 //  SHOP — seed selection & crop encyclopedia
 // ---------------------------------------------------------------
+let currentShopTab = 'seeds';
+
 function renderShop() {
   const st = store.state;
   const body = $('shop-body');
+  
+  const tabSeedsClass = currentShopTab === 'seeds' ? 'bg-farm-leaf text-white' : 'bg-slate-100 text-slate-600';
+  const tabAnimalsClass = currentShopTab === 'animals' ? 'bg-farm-leaf text-white' : 'bg-slate-100 text-slate-600';
+  
+  let contentHtml = '';
+  
+  if (currentShopTab === 'seeds') {
+    contentHtml = `
+      <p class="mb-3 text-slate-600 text-sm">Pick a seed to plant. Higher levels unlock fancier crops!</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${Object.values(CROPS).map((c) => {
+          const unlocked = store.isCropUnlocked(c.id);
+          const active = st.activeSeed === c.id;
+          return `
+          <button data-seed="${c.id}" ${unlocked ? '' : 'disabled'}
+            class="info-card text-left flex gap-3 items-center ${active ? 'ring-4 ring-farm-leaf' : ''} ${unlocked ? '' : 'opacity-50'}">
+            <span class="text-4xl">${c.emoji}</span>
+            <div class="flex-1">
+              <div class="font-display text-lg">${c.name} ${active ? '✅' : ''}</div>
+              <div class="text-sm text-slate-600 text-xs">${unlocked ? c.fact : `🔒 Unlocks at Level ${c.unlockLevel}`}</div>
+              <div class="text-xs mt-1 text-slate-500">Seed ${c.seedCost}🪙 → Sell ${c.reward}🪙 · +${c.xp}⭐</div>
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+  } else {
+    contentHtml = `
+      <p class="mb-3 text-slate-600 text-sm">Adopt animals for your Animal Pen! Feed them and collect their products. 🥚🧶🥛</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${Object.values(ANIMAL_TYPES).map((a) => {
+          const unlocked = st.level >= a.unlockLevel;
+          const ownedCount = st.animals[a.id] || 0;
+          return `
+          <div class="info-card text-left flex gap-3 items-center ${unlocked ? '' : 'opacity-50'}">
+            <span class="text-4xl">${a.emoji}</span>
+            <div class="flex-1">
+              <div class="font-display text-lg flex justify-between items-center">
+                <span>${a.name}</span>
+                <span class="text-xs bg-farm-leaf/20 text-farm-leaf px-2 py-0.5 rounded-full font-bold">Owned: ${ownedCount}</span>
+              </div>
+              <div class="text-sm text-slate-600 text-xs">${unlocked ? a.fact : `🔒 Unlocks at Level ${a.unlockLevel}`}</div>
+              <div class="text-xs mt-1 text-slate-500">Feed: ${a.feedCost}🪙 · Get ${a.productEmoji} (${a.reward}🪙)</div>
+              <button data-buy-animal="${a.id}" ${unlocked ? '' : 'disabled'}
+                class="btn-chunky bg-farm-sun text-slate-800 text-xs px-3 py-1.5 mt-2 flex items-center justify-center gap-1">
+                Buy for ${a.cost}🪙
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
   body.innerHTML = `
-    <p class="mb-3 text-slate-600">Pick a seed to plant. Higher levels unlock fancier crops!</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      ${Object.values(CROPS).map((c) => {
-        const unlocked = store.isCropUnlocked(c.id);
-        const active = st.activeSeed === c.id;
-        return `
-        <button data-seed="${c.id}" ${unlocked ? '' : 'disabled'}
-          class="info-card text-left flex gap-3 items-center ${active ? 'ring-4 ring-farm-leaf' : ''} ${unlocked ? '' : 'opacity-50'}">
-          <span class="text-4xl">${c.emoji}</span>
-          <div class="flex-1">
-            <div class="font-display text-lg">${c.name} ${active ? '✅' : ''}</div>
-            <div class="text-sm text-slate-600">${unlocked ? c.fact : `🔒 Unlocks at Level ${c.unlockLevel}`}</div>
-            <div class="text-xs mt-1 text-slate-500">Seed ${c.seedCost}🪙 → Sell ${c.reward}🪙 · +${c.xp}⭐</div>
-          </div>
-        </button>`;
-      }).join('')}
-    </div>`;
-  body.querySelectorAll('[data-seed]').forEach((b) => b.addEventListener('click', () => {
-    store.set({ activeSeed: b.dataset.seed });
-    audio.click();
-    toast(`Selected ${CROPS[b.dataset.seed].name} seeds`, CROPS[b.dataset.seed].emoji, 1200);
-    renderShop(); renderSeedPicker();
-  }));
+    <div class="flex gap-2 border-b-2 border-slate-100 mb-4 pb-2 shrink-0">
+      <button id="tab-shop-seeds" class="btn-chunky px-4 py-2 text-xs ${tabSeedsClass}">🌱 Seeds</button>
+      <button id="tab-shop-animals" class="btn-chunky px-4 py-2 text-xs ${tabAnimalsClass}">🐣 Animals</button>
+    </div>
+    <div class="flex-1 overflow-y-auto">
+      ${contentHtml}
+    </div>
+  `;
+
+  $('tab-shop-seeds').onclick = () => { currentShopTab = 'seeds'; audio.click(); renderShop(); };
+  $('tab-shop-animals').onclick = () => { currentShopTab = 'animals'; audio.click(); renderShop(); };
+
+  if (currentShopTab === 'seeds') {
+    body.querySelectorAll('[data-seed]').forEach((b) => b.addEventListener('click', () => {
+      store.set({ activeSeed: b.dataset.seed });
+      audio.click();
+      toast(`Selected ${CROPS[b.dataset.seed].name} seeds`, CROPS[b.dataset.seed].emoji, 1200);
+      renderShop(); renderSeedPicker();
+    }));
+  } else {
+    body.querySelectorAll('[data-buy-animal]').forEach((b) => b.addEventListener('click', () => {
+      const type = b.dataset.buyAnimal;
+      const animal = ANIMAL_TYPES[type];
+      if (store.state.coins >= animal.cost) {
+        store.spend(animal.cost);
+        const owned = { ...store.state.animals };
+        owned[type] = (owned[type] || 0) + 1;
+        store.set({ animals: owned });
+        audio.coin();
+        toast(`Adopted a ${animal.name}! 🐣`, animal.emoji);
+        syncAnimals();
+        renderShop();
+      } else {
+        toast('Not enough coins!', '🪙');
+      }
+    }));
+  }
 }
 
 // quick seed picker shown above toolbar
@@ -491,7 +600,8 @@ export function initUI() {
   syncHud();
   renderSeedPicker();
 
-  // contextual hint loop driver is called from main via updateHints()
+  // Handle animal level up celebration
+  scene.hooks.onLevelUp = (lvl) => showLevelUp(lvl);
 }
 
 // Called every frame from main to keep contextual hint fresh.
@@ -504,6 +614,22 @@ export function updateHints(dt) {
   const st = store.state;
   if (st.activeVehicle === 'foot' && isOnMat()) return hint('Press ✋ Act to Rest & start a new day');
   if (isNearWell()) return hint('Press ✋ Act to refill water');
+
+  // Check if near any animal (only on foot)
+  if (st.activeVehicle === 'foot') {
+    const animal = getClosestAnimal();
+    if (animal) {
+      const def = ANIMAL_TYPES[animal.type];
+      if (animal.state === 'hungry') {
+        return hint(`Press ✋ Act to Feed ${def.name} (-${def.feedCost}🪙)`);
+      } else if (animal.state === 'eating') {
+        return hint(`${def.name} is munching... 🌾`);
+      } else if (animal.state === 'ready') {
+        return hint(`Press ✋ Act to Collect ${def.productName} ${def.productEmoji}!`);
+      }
+    }
+  }
+
   if (st.activeVehicle !== 'foot') { hint(null); return; }
   const t = getActiveTile();
   if (!t) { hint(null); return; }

@@ -56,14 +56,21 @@ function runLoader() {
 //  Start menu buttons
 // ---------------------------------------------------------------
 function initMenu() {
-  $('btn-play').addEventListener('click', async () => {
+  const start = async () => {
     await audio.init();
     audio.click();
+    scene.gameStarted = true;
     $('start-menu').classList.add('hidden');
     $('start-menu').classList.remove('flex');
     showGameUI();
     toast('Welcome to your farm! 🌻', '👋', 2600);
-  });
+  };
+  
+  $('btn-play').addEventListener('click', start);
+  if ($('btn-play-nav')) {
+    $('btn-play-nav').addEventListener('click', start);
+  }
+  
   $('btn-howto').addEventListener('click', () => { $('howto').classList.remove('hidden'); });
   $('btn-mute-menu').addEventListener('click', () => {
     store.set({ muted: !store.state.muted });

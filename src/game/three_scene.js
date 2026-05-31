@@ -2,7 +2,7 @@
 //  three_scene.js — 3D world, player, vehicles, tiles, day/night
 // =============================================================
 import * as THREE from 'three';
-import { store, CROPS, VEHICLES } from './state.js';
+import { store, CROPS, VEHICLES, ANIMAL_TYPES } from './state.js';
 
 const FIELD = 6;          // tiles per side
 const TILE = 2.2;         // world units per tile
@@ -19,6 +19,8 @@ export const scene = {
   _wellPos: new THREE.Vector3(0, 0, 0),
   _walkPhase: 0,
   _riding: 'foot',
+  animals: [],
+  gameStarted: false,
 };
 
 let canvas, world, legL, legR, armR, toolGroup;
@@ -62,10 +64,14 @@ export function initScene(canvasEl) {
   buildField(three);
   buildFarmhouse(three);
   buildWell(three);
+  buildAnimalPen(three);
   buildFences(three);
   buildDecor(three);
   buildPlayer(three);
   buildHighlight(three);
+
+  // Sync initial animals if already owned
+  setTimeout(() => syncAnimals(), 100);
 
   resize();
   window.addEventListener('resize', resize);
@@ -175,6 +181,67 @@ function buildWell(three) {
   const drop = makeEmojiSprite('💧', 1.2);
   drop.position.copy(g.position).add(new THREE.Vector3(0, 3.4, 0));
   three.add(drop);
+}
+
+function buildAnimalPen(three) {
+  // Pen area is x from 7.5 to 14.5, z from 1 to 8.
+  // Center of pen: x = 11, z = 4.5. Size: 7 x 7.
+  const m = mat(0xffffff, { r: 0.9 }); // White painted wood
+  const postGeo = new THREE.BoxGeometry(0.16, 0.8, 0.16);
+  const railGeo = new THREE.BoxGeometry(7, 0.08, 0.08);
+
+  // Spawn posts at corners and middle
+  const corners = [
+    [7.5, 1], [14.5, 1], [14.5, 8], [7.5, 8],
+    [11.0, 1], [14.5, 4.5], [11.0, 8], [7.5, 4.5]
+  ];
+  corners.forEach(([x, z]) => {
+    const post = new THREE.Mesh(postGeo, m);
+    post.position.set(x, 0.4, z);
+    post.castShadow = true;
+    three.add(post);
+  });
+
+  // North rail
+  const railN1 = new THREE.Mesh(railGeo, m); railN1.position.set(11.0, 0.6, 1); three.add(railN1);
+  const railN2 = railN1.clone(); railN2.position.y = 0.3; three.add(railN2);
+
+  // South rail
+  const railS1 = new THREE.Mesh(railGeo, m); railS1.position.set(11.0, 0.6, 8); three.add(railS1);
+  const railS2 = railS1.clone(); railS2.position.y = 0.3; three.add(railS2);
+
+  // East rail
+  const railE1 = new THREE.Mesh(railGeo, m); railE1.rotation.y = Math.PI / 2; railE1.position.set(14.5, 0.6, 4.5); three.add(railE1);
+  const railE2 = railE1.clone(); railE2.position.y = 0.3; three.add(railE2);
+
+  // West rail with gate opening
+  const shortRailGeo = new THREE.BoxGeometry(2, 0.08, 0.08);
+  const railW1_top = new THREE.Mesh(shortRailGeo, m); railW1_top.rotation.y = Math.PI / 2; railW1_top.position.set(7.5, 0.6, 2.0); three.add(railW1_top);
+  const railW1_bot = railW1_top.clone(); railW1_bot.position.y = 0.3; three.add(railW1_bot);
+  const railW2_top = new THREE.Mesh(shortRailGeo, m); railW2_top.rotation.y = Math.PI / 2; railW2_top.position.set(7.5, 0.6, 7.0); three.add(railW2_top);
+  const railW2_bot = railW2_top.clone(); railW2_bot.position.y = 0.3; three.add(railW2_bot);
+
+  // Red Barn
+  const barn = new THREE.Group();
+  const barnBody = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.8, 2.0), mat(0xc44536));
+  barnBody.position.y = 0.9; barnBody.castShadow = true;
+  const barnRoof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.0, 4), mat(0xffffff));
+  barnRoof.position.y = 2.3; barnRoof.rotation.y = Math.PI / 4; barnRoof.castShadow = true;
+  const barnDoor = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.1), mat(0x222222));
+  barnDoor.position.set(-0.4, 0.6, 1.01);
+  barn.add(barnBody, barnRoof, barnDoor);
+  barn.position.set(12.5, 0, 2.5);
+  three.add(barn);
+
+  // Trough
+  const trough = new THREE.Group();
+  const troughBody = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.35, 0.7), mat(0x8a5a3b));
+  troughBody.position.y = 0.175; troughBody.castShadow = true;
+  const hay = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), mat(0xe9c46a));
+  hay.position.set(0, 0.28, 0);
+  trough.add(troughBody, hay);
+  trough.position.set(9.5, 0, 6.0);
+  three.add(trough);
 }
 
 function buildFences(three) {
@@ -538,6 +605,9 @@ export function updateScene(dt, input) {
   // ---- Crop growth ----
   growCrops(dt);
 
+  // ---- Update animals ----
+  updateAnimals(dt);
+
   // ---- Highlight nearest interactable tile (only on foot) ----
   const t = st.activeVehicle === 'foot' ? getActiveTile() : null;
   if (t) {
@@ -562,12 +632,18 @@ export function updateScene(dt, input) {
   // bob fruit sprites
   scene.three.traverse((o) => { if (o.isSprite && o.userData.bob) o.position.y = 1.6 + Math.sin(performance.now() / 300) * 0.08; });
 
-  // ---- Camera follow ----
-  const p = scene.player.position;
-  const camTarget = scene._camT || (scene._camT = new THREE.Vector3());
-  camTarget.set(p.x, 11, p.z + 14);
-  scene.camera.position.lerp(camTarget, 0.08);
-  scene.camera.lookAt(p.x, 1, p.z);
+  // ---- Camera follow / rotate on landing page ----
+  if (!scene.gameStarted) {
+    const time = performance.now() * 0.00015;
+    scene.camera.position.set(Math.cos(time) * 16, 9, Math.sin(time) * 16);
+    scene.camera.lookAt(0, 1.0, 0);
+  } else {
+    const p = scene.player.position;
+    const camTarget = scene._camT || (scene._camT = new THREE.Vector3());
+    camTarget.set(p.x, 11, p.z + 14);
+    scene.camera.position.lerp(camTarget, 0.08);
+    scene.camera.lookAt(p.x, 1, p.z);
+  }
 
   scene.renderer.render(scene.three, scene.camera);
 }
@@ -673,4 +749,239 @@ function lerpAngle(a, b, t) {
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
+}
+
+// =============================================================
+//  Animal spawning, meshes, and AI logic
+// =============================================================
+function createAnimalMesh(type) {
+  const g = new THREE.Group();
+  const black = mat(0x222222);
+  const white = mat(0xffffff);
+  const orange = mat(0xf4833b);
+  const pink = mat(0xffb5a7);
+
+  if (type === 'chicken') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.45), white);
+    body.position.y = 0.3;
+    body.castShadow = true;
+    
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), white);
+    head.position.set(0, 0.52, 0.12);
+    head.castShadow = true;
+    
+    const beak = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.1), orange);
+    beak.position.set(0, 0.52, 0.25);
+    
+    const comb = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.12), mat(0xe63946));
+    comb.position.set(0, 0.65, 0.1);
+    
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.04), orange);
+    legL.position.set(-0.08, 0.075, 0);
+    const legR = legL.clone();
+    legR.position.x = 0.08;
+
+    g.add(body, head, beak, comb, legL, legR);
+  } else if (type === 'sheep') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.8), white);
+    body.position.y = 0.45;
+    body.castShadow = true;
+    
+    const fluff = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.15, 0.6), white);
+    fluff.position.set(0, 0.75, 0.05);
+    
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), black);
+    head.position.set(0, 0.55, 0.42);
+    head.castShadow = true;
+
+    const earL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.06), black);
+    earL.position.set(-0.16, 0.55, 0.38);
+    earL.rotation.z = 0.4;
+    const earR = earL.clone();
+    earR.position.x = 0.16;
+    earR.rotation.z = -0.4;
+    
+    const legGeo = new THREE.BoxGeometry(0.08, 0.25, 0.08);
+    const legFL = new THREE.Mesh(legGeo, black); legFL.position.set(-0.18, 0.125, 0.25);
+    const legFR = legFL.clone(); legFR.position.x = 0.18;
+    const legBL = legFL.clone(); legBL.position.z = -0.25;
+    const legBR = legFR.clone(); legBR.position.z = -0.25;
+
+    g.add(body, fluff, head, earL, earR, legFL, legFR, legBL, legBR);
+  } else if (type === 'cow') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 1.2), white);
+    body.position.y = 0.65;
+    body.castShadow = true;
+
+    const spot1 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.35, 0.35), black);
+    spot1.position.set(0.36, 0.65, 0.2);
+    const spot2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.4, 0.3), black);
+    spot2.position.set(-0.36, 0.6, -0.2);
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), white);
+    head.position.set(0, 0.9, 0.6);
+    head.castShadow = true;
+
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.15), pink);
+    snout.position.set(0, 0.8, 0.78);
+
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.06), mat(0xcccccc));
+    hornL.position.set(-0.15, 1.1, 0.55);
+    hornL.rotation.z = -0.3;
+    const hornR = hornL.clone();
+    hornR.position.x = 0.15;
+    hornR.rotation.z = 0.3;
+
+    const legGeo = new THREE.BoxGeometry(0.12, 0.4, 0.12);
+    const legFL = new THREE.Mesh(legGeo, white); legFL.position.set(-0.24, 0.2, 0.4);
+    const legFR = legFL.clone(); legFR.position.x = 0.24;
+    const legBL = legFL.clone(); legBL.position.z = -0.4;
+    const legBR = legFR.clone(); legBR.position.z = -0.4;
+
+    g.add(body, spot1, spot2, head, snout, hornL, hornR, legFL, legFR, legBL, legBR);
+  }
+  g.scale.setScalar(0.95);
+  return g;
+}
+
+export function syncAnimals() {
+  if (!scene.three) return;
+  const counts = store.state.animals || { chicken: 0, sheep: 0, cow: 0 };
+  const curCounts = { chicken: 0, sheep: 0, cow: 0 };
+  scene.animals.forEach(a => { curCounts[a.type]++; });
+
+  Object.keys(counts).forEach(type => {
+    const needed = counts[type] - curCounts[type];
+    for (let i = 0; i < needed; i++) {
+      spawnAnimal(type);
+    }
+  });
+}
+
+function spawnAnimal(type) {
+  const mesh = createAnimalMesh(type);
+  const x = 8.5 + Math.random() * 5.0;
+  const z = 2.0 + Math.random() * 5.0;
+  mesh.position.set(x, 0, z);
+  scene.three.add(mesh);
+
+  const animal = {
+    type,
+    mesh,
+    state: 'hungry', // hungry | eating | ready
+    timer: 0,
+    targetPos: new THREE.Vector3(x, 0, z),
+    roamTimer: 0.5 + Math.random() * 2,
+    productSprite: null,
+    waddlePhase: Math.random() * Math.PI * 2,
+    foodBowl: null
+  };
+  scene.animals.push(animal);
+}
+
+function showAnimalProduct(animal) {
+  const productEmoji = ANIMAL_TYPES[animal.type].productEmoji;
+  const spr = makeEmojiSprite(productEmoji, 0.85);
+  spr.position.set(0, animal.type === 'cow' ? 1.6 : (animal.type === 'sheep' ? 1.2 : 1.0), 0);
+  spr.userData.bob = true;
+  animal.mesh.add(spr);
+  animal.productSprite = spr;
+}
+
+export function feedAnimal(animal) {
+  if (animal.state !== 'hungry') return false;
+  const def = ANIMAL_TYPES[animal.type];
+  if (!store.spend(def.feedCost)) return false;
+
+  animal.state = 'eating';
+  animal.timer = def.growTime;
+  
+  // Spawn a small yellow bowl next to the animal
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.08, 8), mat(0xd66853));
+  bowl.position.copy(animal.mesh.position).add(new THREE.Vector3(0.2, 0.04, 0.2));
+  scene.three.add(bowl);
+  animal.foodBowl = bowl;
+  return true;
+}
+
+export function collectProduct(animal) {
+  if (animal.state !== 'ready') return false;
+  const def = ANIMAL_TYPES[animal.type];
+  
+  // Reward player
+  store.addCoins(def.reward);
+  const xpRes = store.addXp(def.xp);
+  if (xpRes.leveledUp) {
+    if (scene.hooks.onLevelUp) scene.hooks.onLevelUp(xpRes.newLevel);
+  }
+
+  // Remove bubble
+  if (animal.productSprite) {
+    animal.mesh.remove(animal.productSprite);
+    animal.productSprite = null;
+  }
+  
+  // Pop effect
+  popEffect(animal.mesh.position.x, animal.mesh.position.y + 1, def.productEmoji);
+  
+  animal.state = 'hungry';
+  return def;
+}
+
+function updateAnimals(dt) {
+  const minX = 8.0, maxX = 14.0, minZ = 1.5, maxZ = 7.5;
+  scene.animals.forEach(a => {
+    if (a.state === 'hungry' || a.state === 'ready') {
+      a.roamTimer -= dt;
+      if (a.roamTimer <= 0) {
+        a.targetPos.set(
+          minX + Math.random() * (maxX - minX),
+          0,
+          minZ + Math.random() * (maxZ - minZ)
+        );
+        a.roamTimer = 3 + Math.random() * 5;
+      }
+
+      const dist = a.mesh.position.distanceTo(a.targetPos);
+      if (dist > 0.1) {
+        const dir = new THREE.Vector3().subVectors(a.targetPos, a.mesh.position).normalize();
+        const speed = a.type === 'chicken' ? 0.8 : (a.type === 'sheep' ? 0.6 : 0.4);
+        a.mesh.position.addScaledVector(dir, speed * dt);
+        
+        const targetAngle = Math.atan2(dir.x, dir.z);
+        a.mesh.rotation.y = lerpAngle(a.mesh.rotation.y, targetAngle, 0.1);
+
+        a.waddlePhase += dt * 8;
+        if (a.type === 'chicken') {
+          a.mesh.position.y = Math.max(0, Math.sin(a.waddlePhase) * 0.15);
+          a.mesh.rotation.z = Math.sin(a.waddlePhase) * 0.1;
+        } else {
+          a.mesh.position.y = 0;
+          a.mesh.rotation.z = Math.sin(a.waddlePhase) * 0.04;
+        }
+      } else {
+        a.mesh.position.y = 0;
+        a.mesh.rotation.z *= 0.8;
+      }
+    } else if (a.state === 'eating') {
+      a.timer -= dt;
+      a.waddlePhase += dt * 12;
+      a.mesh.rotation.x = Math.sin(a.waddlePhase) * 0.15;
+      
+      // Make food bowl stay near animal as it bobs
+      if (a.foodBowl) {
+        a.foodBowl.position.y = 0.04;
+      }
+
+      if (a.timer <= 0) {
+        a.state = 'ready';
+        a.mesh.rotation.x = 0;
+        if (a.foodBowl) {
+          scene.three.remove(a.foodBowl);
+          a.foodBowl = null;
+        }
+        showAnimalProduct(a);
+      }
+    }
+  });
 }
