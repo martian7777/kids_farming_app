@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#bfe6ff" />
+  <title>Cozy Farm — Learn & Grow!</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="font-body select-none overflow-hidden bg-farm-sky text-slate-800">
+
+  <!-- 3D Canvas -->
+  <canvas id="scene"></canvas>
+
+  <!-- ===================== LOADER ===================== -->
+  <div id="loader" class="screen-overlay flex flex-col items-center justify-center gap-6 bg-gradient-to-b from-farm-sky to-farm-sky2">
+    <div class="text-7xl animate-floaty">🚜</div>
+    <h1 class="font-display text-4xl text-white drop-shadow-lg">Cozy Farm</h1>
+    <div class="w-56 h-4 rounded-full bg-white/40 overflow-hidden">
+      <div id="loader-bar" class="h-full w-0 bg-farm-leaf rounded-full transition-all duration-300"></div>
+    </div>
+    <p id="loader-text" class="text-white/90 font-semibold">Waking up the chickens…</p>
+  </div>
+
+  <!-- ===================== START MENU ===================== -->
+  <div id="start-menu" class="screen-overlay hidden flex-col items-center justify-center gap-7 bg-gradient-to-b from-farm-sky to-farm-grass/60">
+    <div class="text-center animate-pop">
+      <div class="text-8xl animate-floaty">🌻</div>
+      <h1 class="font-display text-5xl text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.15)] mt-2">Cozy Farm</h1>
+      <p class="font-display text-xl text-white/95 mt-1">Plant • Grow • Learn!</p>
+    </div>
+    <button id="btn-play" class="btn-chunky bg-farm-leaf text-white text-2xl px-10 py-4">▶ Play</button>
+    <div class="flex gap-3">
+      <button id="btn-howto" class="btn-chunky bg-white text-slate-700 text-lg px-6 py-3">❓ How to Play</button>
+      <button id="btn-mute-menu" class="btn-chunky bg-white text-slate-700 text-lg px-6 py-3">🔊 Sound</button>
+    </div>
+  </div>
+
+  <!-- ===================== TOP HUD ===================== -->
+  <header id="hud" class="hidden fixed top-0 left-0 right-0 z-30 p-3 flex items-center justify-between pointer-events-none" style="padding-top: max(0.75rem, env(safe-area-inset-top));">
+    <div class="flex gap-2 pointer-events-auto">
+      <div class="hud-pill"><span class="text-2xl">🪙</span><span id="hud-coins" class="font-display">0</span></div>
+      <div class="hud-pill"><span class="text-2xl">⭐</span><span>Lv <span id="hud-level" class="font-display">1</span></span></div>
+      <div class="hud-pill flex-col !items-start !gap-0 min-w-[90px]">
+        <div class="flex items-center gap-1 text-xs"><span>XP</span><span id="hud-xp-text">0/100</span></div>
+        <div class="w-full h-2 rounded-full bg-black/10 overflow-hidden"><div id="hud-xp-bar" class="h-full w-0 bg-farm-sun"></div></div>
+      </div>
+    </div>
+    <div class="flex gap-2 pointer-events-auto">
+      <div class="hud-pill"><span id="hud-time-icon" class="text-2xl">🌅</span><span id="hud-time" class="font-display">Day 1</span></div>
+      <div class="hud-pill flex-col !items-start !gap-0 min-w-[90px]">
+        <div class="flex items-center gap-1 text-xs"><span>💧</span><span id="hud-water-text">100%</span></div>
+        <div class="w-full h-2 rounded-full bg-black/10 overflow-hidden"><div id="hud-water-bar" class="h-full w-full bg-farm-sky2"></div></div>
+      </div>
+      <button id="btn-mute" class="hud-pill !px-3">🔊</button>
+    </div>
+  </header>
+
+  <!-- ===================== CROP/TOAST NOTIFICATIONS ===================== -->
+  <div id="toasts" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-none"></div>
+
+  <!-- ===================== TOOL HINT (context action) ===================== -->
+  <div id="action-hint" class="hidden fixed left-1/2 -translate-x-1/2 z-30 bottom-44 bg-black/70 text-white px-4 py-2 rounded-full font-semibold text-sm"></div>
+
+  <!-- ===================== VIRTUAL JOYSTICK ===================== -->
+  <div id="joystick" class="hidden fixed z-30 bottom-28 left-6 w-36 h-36 rounded-full bg-white/25 backdrop-blur-sm border-4 border-white/50 touch-none" style="bottom: max(7rem, calc(env(safe-area-inset-bottom) + 7rem));">
+    <div id="joystick-knob" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white/80 shadow-soft"></div>
+  </div>
+
+  <!-- ===================== BOTTOM TOOLBAR ===================== -->
+  <nav id="toolbar" class="hidden fixed bottom-0 left-0 right-0 z-30 p-3 flex items-end justify-center gap-2 sm:gap-3 pointer-events-none" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
+    <button class="tool-btn pointer-events-auto" data-action="act"><span class="ico">✋</span><span class="lbl">Act</span></button>
+    <button class="tool-btn pointer-events-auto" data-action="water"><span class="ico">💧</span><span class="lbl">Water</span></button>
+    <button class="tool-btn pointer-events-auto" data-action="vehicle"><span class="ico">🚜</span><span class="lbl">Ride</span></button>
+    <button class="tool-btn pointer-events-auto" data-action="shop"><span class="ico">🛒</span><span class="lbl">Shop</span></button>
+    <button class="tool-btn pointer-events-auto" data-action="garage"><span class="ico">🏠</span><span class="lbl">Garage</span></button>
+    <button class="tool-btn pointer-events-auto" data-action="academy"><span class="ico">🎓</span><span class="lbl">Learn</span></button>
+  </nav>
+
+  <!-- ===================== SEED PICKER ===================== -->
+  <div id="seed-picker" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 z-30 flex gap-2 bg-white/85 backdrop-blur p-2 rounded-chunky shadow-chunky pointer-events-auto" style="bottom: max(7rem, calc(env(safe-area-inset-bottom) + 7rem));"></div>
+
+  <!-- ===================== GENERIC DIALOG SHELL ===================== -->
+  <!-- Academy -->
+  <div id="academy" class="dialog-overlay hidden">
+    <div class="dialog-card max-w-2xl">
+      <div class="dialog-head">
+        <h2 class="font-display text-2xl">🎓 Lesson Academy</h2>
+        <button class="dialog-close" data-close="academy">✕</button>
+      </div>
+      <div id="academy-body" class="dialog-body"></div>
+    </div>
+  </div>
+
+  <!-- Garage -->
+  <div id="garage" class="dialog-overlay hidden">
+    <div class="dialog-card max-w-3xl">
+      <div class="dialog-head">
+        <h2 class="font-display text-2xl">🏠 Vehicle Garage</h2>
+        <button class="dialog-close" data-close="garage">✕</button>
+      </div>
+      <div id="garage-body" class="dialog-body"></div>
+    </div>
+  </div>
+
+  <!-- Shop -->
+  <div id="shop" class="dialog-overlay hidden">
+    <div class="dialog-card max-w-2xl">
+      <div class="dialog-head">
+        <h2 class="font-display text-2xl">🛒 Seed & Tool Shop</h2>
+        <button class="dialog-close" data-close="shop">✕</button>
+      </div>
+      <div id="shop-body" class="dialog-body"></div>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div id="howto" class="dialog-overlay hidden">
+    <div class="dialog-card max-w-lg">
+      <div class="dialog-head">
+        <h2 class="font-display text-2xl">❓ How to Play</h2>
+        <button class="dialog-close" data-close="howto">✕</button>
+      </div>
+      <div class="dialog-body space-y-3 text-lg">
+        <p>🕹️ <b>Move</b> with the joystick (or W A S D / arrow keys).</p>
+        <p>✋ <b>Act</b> to till soil, plant seeds, harvest ripe crops, or rest on the farmhouse mat.</p>
+        <p>💧 <b>Water</b> your plants so they grow big and strong.</p>
+        <p>🚜 <b>Ride</b> vehicles for super-fast farming!</p>
+        <p>🎓 <b>Learn</b> in the Academy to earn coins and medals.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level up celebration -->
+  <div id="levelup" class="dialog-overlay hidden">
+    <div class="dialog-card max-w-sm text-center !p-8">
+      <div class="text-7xl animate-floaty">🎉</div>
+      <h2 class="font-display text-3xl mt-2">Level Up!</h2>
+      <p class="text-xl mt-1">You reached <b>Level <span id="levelup-num">2</span></b></p>
+      <p id="levelup-reward" class="text-farm-leaf font-semibold mt-2"></p>
+      <button class="btn-chunky bg-farm-leaf text-white text-xl px-8 py-3 mt-5" data-close="levelup">Yay! 🙌</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

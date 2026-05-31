@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #scene { height: 100%; width: 100%; margin: 0; }
+  body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  #scene { position: fixed; inset: 0; display: block; z-index: 0; }
+}
+
+@layer components {
+  /* Full-screen overlay screens (loader / start menu) */
+  .screen-overlay {
+    @apply fixed inset-0 z-50 flex;
+  }
+
+  /* Chunky kid-friendly button */
+  .btn-chunky {
+    @apply font-display rounded-chunky shadow-chunky active:translate-y-1 active:shadow-soft
+           transition-all duration-150 border-b-4 border-black/10 cursor-pointer;
+  }
+  .btn-chunky:active { @apply border-b-2; }
+
+  /* HUD pill */
+  .hud-pill {
+    @apply flex items-center gap-1.5 bg-white/85 backdrop-blur px-3 py-1.5 rounded-chunky
+           shadow-soft font-semibold text-slate-700 text-sm;
+  }
+
+  /* Bottom toolbar buttons */
+  .tool-btn {
+    @apply flex flex-col items-center justify-center gap-0.5 bg-white/90 backdrop-blur
+           w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-chunky shadow-chunky border-b-4 border-black/10
+           active:translate-y-1 active:border-b-2 transition-all duration-150;
+  }
+  .tool-btn .ico { @apply text-2xl sm:text-3xl leading-none; }
+  .tool-btn .lbl { @apply text-[0.65rem] font-bold text-slate-600; }
+  .tool-btn.active { @apply bg-farm-sun/90 ring-4 ring-farm-sun/50; }
+
+  /* Dialog overlays */
+  .dialog-overlay {
+    @apply fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm;
+  }
+  .dialog-card {
+    @apply w-full bg-white rounded-chunky shadow-chunky max-h-[88vh] flex flex-col animate-pop overflow-hidden;
+  }
+  .dialog-head {
+    @apply flex items-center justify-between px-5 py-3 bg-gradient-to-r from-farm-leaf to-farm-grass text-white;
+  }
+  .dialog-close {
+    @apply w-9 h-9 rounded-full bg-white/30 hover:bg-white/50 text-white font-bold flex items-center justify-center transition;
+  }
+  .dialog-body { @apply p-5 overflow-y-auto; }
+
+  /* Cards used inside garage/shop/academy */
+  .info-card {
+    @apply bg-slate-50 rounded-chunky p-4 border-2 border-slate-100 shadow-soft;
+  }
+
+  /* Quiz answer buttons */
+  .quiz-opt {
+    @apply w-full text-left px-4 py-3 rounded-chunky bg-slate-50 border-2 border-slate-200
+           font-semibold hover:border-farm-leaf hover:bg-farm-leaf/10 transition active:scale-[0.98];
+  }
+  .quiz-opt.correct { @apply bg-farm-leaf/20 border-farm-leaf; }
+  .quiz-opt.wrong { @apply bg-farm-berry/20 border-farm-berry; }
+
+  /* Toast notification */
+  .toast {
+    @apply bg-white/95 backdrop-blur px-4 py-2 rounded-chunky shadow-chunky font-semibold
+           flex items-center gap-2 animate-pop;
+  }
+}
+
+/* Slide progress dots */
+.slide-dot { width: 10px; height: 10px; border-radius: 9999px; background: #cbd5e1; transition: all .2s; }
+.slide-dot.active { background: #3fa34d; width: 26px; }
+
+/* Day/night vignette tint applied to body */
+#night-tint {
+  position: fixed; inset: 0; z-index: 20; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 30%, transparent 40%, rgba(20,24,80,0.0) 100%);
+  transition: background 1.5s linear, opacity 1.5s linear;
+  opacity: 0;
+}
