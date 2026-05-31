@@ -17,10 +17,16 @@ export const scene = {
   hooks: {},
   _matPos: new THREE.Vector3(0, 0, 0),
   _wellPos: new THREE.Vector3(0, 0, 0),
+  _windmillPos: new THREE.Vector3(-12.6, 0, -14.6),
+  _greenhousePos: new THREE.Vector3(-13.6, 0, 0),
+  _beehivePos: new THREE.Vector3(12.6, 0, -10.6),
   _walkPhase: 0,
   _riding: 'foot',
   animals: [],
   gameStarted: false,
+  windmillSails: null,
+  bees: [],
+  _honeyTimer: 0,
 };
 
 let canvas, world, legL, legR, armR, toolGroup;
@@ -65,6 +71,9 @@ export function initScene(canvasEl) {
   buildFarmhouse(three);
   buildWell(three);
   buildAnimalPen(three);
+  buildWindmill(three);
+  buildGreenhouse(three);
+  buildBeehive(three);
   buildFences(three);
   buildDecor(three);
   buildPlayer(three);
@@ -242,6 +251,140 @@ function buildAnimalPen(three) {
   trough.add(troughBody, hay);
   trough.position.set(9.5, 0, 6.0);
   three.add(trough);
+}
+
+function buildWindmill(three) {
+  const g = new THREE.Group();
+  // Stone tower (tapered cylinder)
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.4, 4.2, 16), mat(0xc9c2b4));
+  tower.position.y = 2.1; tower.castShadow = true;
+  // Conical wooden cap
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.2, 16), mat(0x8a5a3b));
+  cap.position.y = 4.7; cap.castShadow = true;
+  // A little door + window for charm
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.2), mat(0x6b4326));
+  door.position.set(0, 0.6, 1.32);
+  const window1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.2), mat(0x4aa3e0, { r: 0.3 }));
+  window1.position.set(0, 2.6, 1.28);
+  g.add(tower, cap, door, window1);
+
+  // Rotating sail assembly mounted on the front of the cap
+  const sails = new THREE.Group();
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.4, 12), mat(0x5b3b22));
+  hub.rotation.x = Math.PI / 2;
+  sails.add(hub);
+  const bladeArm = mat(0x6b4326);
+  const bladeCloth = mat(0xfaf3e0, { r: 0.8 });
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.12), bladeArm);
+    spar.position.y = 1.2;
+    const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.9, 0.05), bladeCloth);
+    cloth.position.set(0.4, 1.2, 0.04);
+    arm.add(spar, cloth);
+    arm.rotation.z = (i / 4) * Math.PI * 2;
+    sails.add(arm);
+  }
+  sails.position.set(0, 4.4, 1.5);
+  sails.castShadow = true;
+  g.add(sails);
+  scene.windmillSails = sails;
+
+  g.position.copy(scene._windmillPos);
+  three.add(g);
+
+  const spr = makeEmojiSprite('🌬️', 1.2);
+  spr.position.copy(scene._windmillPos).add(new THREE.Vector3(0, 6.2, 0));
+  three.add(spr);
+}
+
+function buildGreenhouse(three) {
+  const g = new THREE.Group();
+  const frame = mat(0xb7c0c9, { m: 0.5, r: 0.4 });
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x8fd0ff, roughness: 0.1, metalness: 0.1,
+    transparent: true, opacity: 0.35,
+  });
+  // Base slab
+  const base = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.3, 5.0), mat(0x9aa6b2));
+  base.position.y = 0.15; base.receiveShadow = true;
+  // Glass walls (a single translucent box) + gabled glass roof
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(4.0, 2.6, 4.6), glass);
+  walls.position.y = 1.6;
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.35, 4.6, 3), glass);
+  roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2;
+  roof.position.y = 3.0; roof.scale.y = 0.9;
+  // Steel frame edges (corner posts + ridge)
+  const postGeo = new THREE.BoxGeometry(0.14, 2.8, 0.14);
+  [[-2, 2.3], [2, 2.3], [2, -2.3], [-2, -2.3]].forEach(([x, z]) => {
+    const p = new THREE.Mesh(postGeo, frame); p.position.set(x, 1.6, z); g.add(p);
+  });
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 4.8), frame);
+  ridge.position.y = 4.0;
+  // Door
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.8, 0.12), frame);
+  door.position.set(0, 0.9, 2.32);
+  g.add(base, walls, roof, ridge, door);
+  g.traverse((o) => { if (o.isMesh && o.material === frame) o.castShadow = true; });
+
+  g.position.copy(scene._greenhousePos);
+  three.add(g);
+
+  const spr = makeEmojiSprite('🧪', 1.2);
+  spr.position.copy(scene._greenhousePos).add(new THREE.Vector3(0, 4.8, 0));
+  three.add(spr);
+}
+
+function buildBeehive(three) {
+  const g = new THREE.Group();
+  // Stand
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 1.1), mat(0x8a5a3b));
+  stand.position.y = 0.25; stand.castShadow = true;
+  g.add(stand);
+  // Stacked hive boxes (Langstroth supers)
+  const boxMat = mat(0xf0d59a);
+  for (let i = 0; i < 3; i++) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), boxMat);
+    box.position.y = 0.75 + i * 0.52; box.castShadow = true;
+    g.add(box);
+    // little landing-board lip
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.06, 0.18), mat(0xd9b870));
+    lip.position.set(0, 0.55 + i * 0.52, 0.55);
+    g.add(lip);
+  }
+  // Flat lid
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.18, 1.15), mat(0xcaa86a));
+  lid.position.y = 0.75 + 2 * 0.52 + 0.34; lid.castShadow = true;
+  g.add(lid);
+
+  g.position.copy(scene._beehivePos);
+  three.add(g);
+
+  // Orbiting bees (yellow/black striped spheres)
+  const beeBody = mat(0xf6c026);
+  for (let i = 0; i < 6; i++) {
+    const bee = new THREE.Group();
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), beeBody);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.04, 0.21), mat(0x222222));
+    bee.add(ball, stripe);
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+    const wing = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), wingMat);
+    wing.scale.set(1, 0.4, 1.6); wing.position.y = 0.08;
+    bee.add(wing);
+    three.add(bee);
+    scene.bees.push({
+      mesh: bee,
+      angle: (i / 6) * Math.PI * 2,
+      radius: 1.4 + Math.random() * 0.7,
+      speed: 1.2 + Math.random() * 0.8,
+      height: 1.6 + Math.random() * 1.2,
+      bob: Math.random() * Math.PI * 2,
+    });
+  }
+
+  const spr = makeEmojiSprite('🐝', 1.1);
+  spr.position.copy(scene._beehivePos).add(new THREE.Vector3(0, 3.4, 0));
+  three.add(spr);
 }
 
 function buildFences(three) {
@@ -483,6 +626,8 @@ export function harvestTile(t) {
   t.state = 'grass'; t.crop = null; t.progress = 0; t.ripe = false; t.watered = 0;
   t.mesh.material = mat(0x7bbd61);
   popEffect(t.x, t.z, CROPS[cropId].emoji);
+  // record the harvested crop in the player's inventory
+  store.addItem(cropId, 1);
   return cropId;
 }
 
@@ -491,6 +636,15 @@ export function isOnMat() {
 }
 export function isNearWell() {
   return scene.player.position.distanceTo(scene._wellPos) < 4.0;
+}
+export function isNearWindmill() {
+  return scene.player.position.distanceTo(scene._windmillPos) < 4.0;
+}
+export function isNearGreenhouse() {
+  return scene.player.position.distanceTo(scene._greenhousePos) < 4.0;
+}
+export function isNearBeehive() {
+  return scene.player.position.distanceTo(scene._beehivePos) < 4.0;
 }
 
 function makePlant(crop) {
@@ -560,12 +714,20 @@ export function updateScene(dt, input) {
   const st = store.state;
   const veh = VEHICLES[st.activeVehicle];
 
+  // ---- Honey speed boost countdown ----
+  const boosted = st.speedBoostTimer > 0;
+  if (boosted) {
+    st.speedBoostTimer = Math.max(0, st.speedBoostTimer - dt);
+    if (st.speedBoostTimer === 0 && scene.hooks.onBoostEnd) scene.hooks.onBoostEnd();
+  }
+  const boostMult = boosted ? 1.6 : 1;
+
   // ---- Movement ----
   const len = Math.hypot(input.x, input.y);
   const moving = len > 0.05;
   if (moving) {
     const nx = input.x / Math.max(len, 1), nz = input.y / Math.max(len, 1);
-    const speed = veh.speed * (len > 1 ? 1 : len);
+    const speed = veh.speed * boostMult * (len > 1 ? 1 : len);
     scene.player.position.x = clamp(scene.player.position.x + nx * speed * dt, -HALF - 12, HALF + 12);
     scene.player.position.z = clamp(scene.player.position.z + nz * speed * dt, -HALF - 12, HALF + 12);
     scene.facing.set(nx, 0, nz).normalize();
@@ -576,9 +738,11 @@ export function updateScene(dt, input) {
   // ---- Walk / engine animation ----
   if (st.activeVehicle === 'foot') {
     if (moving) {
-      scene._walkPhase += dt * 10;
-      legL.rotation.x = Math.sin(scene._walkPhase) * 0.6;
-      legR.rotation.x = -Math.sin(scene._walkPhase) * 0.6;
+      // legs swing faster (and a little wider) during the honey speed boost
+      scene._walkPhase += dt * (boosted ? 18 : 10);
+      const swing = boosted ? 0.85 : 0.6;
+      legL.rotation.x = Math.sin(scene._walkPhase) * swing;
+      legR.rotation.x = -Math.sin(scene._walkPhase) * swing;
     } else {
       legL.rotation.x *= 0.8; legR.rotation.x *= 0.8;
     }
@@ -622,6 +786,28 @@ export function updateScene(dt, input) {
 
   // ---- Day / night ----
   updateDayNight(dt);
+
+  // ---- Buildings: windmill sails, bees, honey production ----
+  if (scene.windmillSails) scene.windmillSails.rotation.z += dt * 1.1;
+  const nowS = performance.now() / 1000;
+  for (const bee of scene.bees) {
+    bee.angle += bee.speed * dt;
+    bee.mesh.position.set(
+      scene._beehivePos.x + Math.cos(bee.angle) * bee.radius,
+      bee.height + Math.sin(nowS * 6 + bee.bob) * 0.25,
+      scene._beehivePos.z + Math.sin(bee.angle) * bee.radius
+    );
+    bee.mesh.rotation.y = -bee.angle;
+  }
+  // produce a honey jar every 30s, up to 3 ready at a time
+  scene._honeyTimer += dt;
+  if (scene._honeyTimer >= 30) {
+    scene._honeyTimer = 0;
+    if ((store.state.inventory.honey || 0) < 3) {
+      store.addItem('honey', 1);
+      if (scene.hooks.onHoney) scene.hooks.onHoney(store.state.inventory.honey);
+    }
+  }
 
   // ---- Effects & clouds ----
   updateEffects(dt);
@@ -891,8 +1077,16 @@ function showAnimalProduct(animal) {
 export function feedAnimal(animal) {
   if (animal.state !== 'hungry') return false;
   const def = ANIMAL_TYPES[animal.type];
-  if (!store.spend(def.feedCost)) return false;
+  // Use free organic feed (from the Windmill) first, then fall back to coins.
+  let paidWith = 'coins';
+  if (store.hasItems('organicFeed', 1)) {
+    store.addItem('organicFeed', -1);
+    paidWith = 'feed';
+  } else if (!store.spend(def.feedCost)) {
+    return false;
+  }
 
+  animal.lastPaidWith = paidWith;
   animal.state = 'eating';
   animal.timer = def.growTime;
   

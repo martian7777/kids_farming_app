@@ -1,13 +1,16 @@
 // =============================================================
 //  ui.js — HUD, joystick, toolbar, dialogs (academy/garage/shop)
 // =============================================================
-import { store, CROPS, VEHICLES, UPGRADES, xpForLevel, ANIMAL_TYPES } from './state.js';
+import {
+  store, CROPS, VEHICLES, UPGRADES, xpForLevel, ANIMAL_TYPES,
+  CROSSBREEDS, CROSSBREED_COST, findCrossbreed,
+} from './state.js';
 import { audio } from './audio.js';
 import { LESSONS } from './lessons.js';
 import {
   setVehicle, getActiveTile, tillTile, plantTile, waterTile, harvestTile,
   isOnMat, isNearWell, setMorning, phaseLabel, scene, feedAnimal, collectProduct,
-  syncAnimals
+  syncAnimals, isNearWindmill, isNearGreenhouse, isNearBeehive
 } from './three_scene.js';
 
 const $ = (id) => document.getElementById(id);
@@ -84,6 +87,32 @@ export function syncTime() {
   $('hud-time').textContent = `${ph.name} · Day ${store.state.day}`;
 }
 
+// Compact inventory strip — shows produced goods + a few harvested crops.
+function syncInventory() {
+  const el = $('hud-inventory');
+  if (!el) return;
+  const inv = store.state.inventory;
+  const items = [
+    ['🌾', inv.wheat], ['🥕', inv.carrot],
+    ['🌱', inv.organicFeed], ['🍞', inv.flour], ['🍯', inv.honey],
+  ].filter(([, n]) => n > 0);
+  if (!items.length) { el.innerHTML = '<span class="text-slate-400">🎒 empty</span>'; return; }
+  el.innerHTML = items.map(([e, n]) => `<span>${e}${n}</span>`).join('');
+}
+
+// Speed-boost countdown pill.
+export function syncBoost() {
+  const el = $('hud-boost');
+  if (!el) return;
+  const t = store.state.speedBoostTimer;
+  if (t > 0) {
+    el.classList.remove('hidden');
+    $('hud-boost-text').textContent = `Speed Boost ${Math.ceil(t)}s`;
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
 // ---------------------------------------------------------------
 //  Toasts
 // ---------------------------------------------------------------
@@ -147,6 +176,11 @@ function doAct() {
   // Refill water at the well
   if (isNearWell()) { store.refillWater(); audio.water(); toast('Water tank refilled!', '💧'); return; }
 
+  // New interactive buildings (usable on foot or riding)
+  if (isNearWindmill()) { renderWindmill(); openDialog('windmill'); return; }
+  if (isNearGreenhouse()) { renderGreenhouse(); openDialog('greenhouse'); return; }
+  if (isNearBeehive()) { renderBeehive(); openDialog('beehive'); return; }
+
   if (st.activeVehicle !== 'foot') { toast('Hop off to farm by hand!', '👟'); return; }
 
   // Check closest animal
@@ -156,10 +190,11 @@ function doAct() {
       const def = ANIMAL_TYPES[animal.type];
       if (feedAnimal(animal)) {
         audio.plant();
-        toast(`Feeding ${def.name}! 🌾`, '🌾', 1200);
+        const usedFeed = animal.lastPaidWith === 'feed';
+        toast(usedFeed ? `Fed ${def.name} free Organic Feed! 🌱` : `Feeding ${def.name}! 🌾`, usedFeed ? '🌱' : '🌾', 1200);
         syncHud();
       } else {
-        toast('Not enough coins for feed!', '🪙');
+        toast('Need coins or Organic Feed to feed!', '🪙');
       }
       return;
     } else if (animal.state === 'ready') {
@@ -261,7 +296,7 @@ export function mountVehicle(id) {
 // ---------------------------------------------------------------
 //  Dialog plumbing
 // ---------------------------------------------------------------
-const DIALOGS = ['academy', 'garage', 'shop', 'howto', 'levelup'];
+const DIALOGS = ['academy', 'garage', 'shop', 'howto', 'levelup', 'windmill', 'greenhouse', 'beehive'];
 function anyDialogOpen() { return DIALOGS.some((d) => !$(d).classList.contains('hidden')); }
 export function openDialog(id) { $(id).classList.remove('hidden'); audio.click(); }
 export function closeDialog(id) { $(id).classList.add('hidden'); }
@@ -294,7 +329,7 @@ function renderShop() {
             <span class="text-4xl">${c.emoji}</span>
             <div class="flex-1">
               <div class="font-display text-lg">${c.name} ${active ? '✅' : ''}</div>
-              <div class="text-sm text-slate-600 text-xs">${unlocked ? c.fact : `🔒 Unlocks at Level ${c.unlockLevel}`}</div>
+              <div class="text-sm text-slate-600 text-xs">${unlocked ? c.fact : (c.exotic ? '🔒 Crossbreed in the Greenhouse Lab to unlock' : `🔒 Unlocks at Level ${c.unlockLevel}`)}</div>
               <div class="text-xs mt-1 text-slate-500">Seed ${c.seedCost}🪙 → Sell ${c.reward}🪙 · +${c.xp}⭐</div>
             </div>
           </button>`;
@@ -377,6 +412,194 @@ export function renderSeedPicker() {
   picker.querySelectorAll('[data-seed]').forEach((b) => b.addEventListener('click', () => {
     store.set({ activeSeed: b.dataset.seed }); audio.click(); renderSeedPicker(); renderShop();
   }));
+}
+
+// ---------------------------------------------------------------
+//  WINDMILL — mill wheat into flour, or mix free organic feed
+// ---------------------------------------------------------------
+function renderWindmill() {
+  const inv = store.state.inventory;
+  const body = $('windmill-body');
+  const canMill = inv.wheat >= 2;
+  const canMix = inv.wheat >= 1 && inv.carrot >= 1;
+  body.innerHTML = `
+    <p class="mb-3 text-slate-600 text-sm">The wind spins the sails for free! Use your harvest to make goods. 🌬️</p>
+    <div class="info-card flex gap-2 items-center mb-4 text-sm">
+      <span class="font-display">In store:</span>
+      <span>🌾 ${inv.wheat}</span><span>🥕 ${inv.carrot}</span>
+      <span>🍞 ${inv.flour} flour</span><span>🌱 ${inv.organicFeed} feed</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="info-card text-center">
+        <div class="text-4xl">🌾➡️🍞</div>
+        <div class="font-display text-lg mt-1">Mill Flour</div>
+        <div class="text-xs text-slate-600 mb-2">Grind <b>2 🌾 Wheat</b> into fresh flour and sell it.</div>
+        <button id="mill-flour" ${canMill ? '' : 'disabled'}
+          class="btn-chunky bg-farm-sun text-slate-800 px-3 py-1.5 text-sm ${canMill ? '' : 'opacity-50'}">
+          Mill (+45🪙)
+        </button>
+        ${canMill ? '' : '<div class="text-xs text-slate-400 mt-1">Need 2 wheat</div>'}
+      </div>
+      <div class="info-card text-center">
+        <div class="text-4xl">🌾🥕➡️🌱</div>
+        <div class="font-display text-lg mt-1">Mix Organic Feed</div>
+        <div class="text-xs text-slate-600 mb-2">Blend <b>1 🌾 + 1 🥕</b> into <b>3 free feeds</b> for your animals.</div>
+        <button id="mix-feed" ${canMix ? '' : 'disabled'}
+          class="btn-chunky bg-farm-leaf text-white px-3 py-1.5 text-sm ${canMix ? '' : 'opacity-50'}">
+          Mix Feed
+        </button>
+        ${canMix ? '' : '<div class="text-xs text-slate-400 mt-1">Need 1 wheat + 1 carrot</div>'}
+      </div>
+    </div>`;
+
+  $('mill-flour').onclick = () => {
+    if (store.state.inventory.wheat < 2) return;
+    store.addItem('wheat', -2);
+    store.addItem('flour', 1);
+    gainCoins(45); gainXp(6);
+    toast('Milled fresh flour! +45🪙', '🍞');
+    renderWindmill();
+  };
+  $('mix-feed').onclick = () => {
+    if (store.state.inventory.wheat < 1 || store.state.inventory.carrot < 1) return;
+    store.addItem('wheat', -1);
+    store.addItem('carrot', -1);
+    store.addItem('organicFeed', 3);
+    audio.plant();
+    toast('Mixed 3 Organic Feeds! 🌱', '🌱');
+    renderWindmill();
+  };
+}
+
+// ---------------------------------------------------------------
+//  GREENHOUSE — crossbreed two crops to unlock an exotic seed
+// ---------------------------------------------------------------
+let ghPick = []; // up to two parent crop ids
+
+function renderGreenhouse() {
+  const body = $('greenhouse-body');
+  const parents = ['wheat', 'carrot', 'strawberry', 'pumpkin', 'golden'];
+  const recipe = ghPick.length === 2 ? findCrossbreed(ghPick[0], ghPick[1]) : null;
+  const known = new Set(ghPick);
+
+  const recipeHints = CROSSBREEDS.map((r) => {
+    const [a, b] = r.parents;
+    const res = CROPS[r.result];
+    const got = store.state.unlockedExotic[r.result];
+    return `<div class="flex items-center gap-1 ${got ? 'opacity-60' : ''}">
+      ${CROPS[a].emoji}+${CROPS[b].emoji} ➡️ ${res.emoji} <span class="text-slate-500">${res.name}</span> ${got ? '✅' : ''}
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <p class="mb-3 text-slate-600 text-sm">Pick <b>two parent crops</b> and crossbreed them to discover exotic new seeds! 🧬</p>
+    <div class="grid grid-cols-5 gap-2 mb-4">
+      ${parents.map((id) => {
+        const c = CROPS[id];
+        const sel = known.has(id);
+        return `<button data-parent="${id}"
+          class="info-card !p-2 text-center ${sel ? 'ring-4 ring-farm-leaf' : ''}">
+          <div class="text-3xl">${c.emoji}</div>
+          <div class="text-[10px] text-slate-500 truncate">${c.name}</div>
+        </button>`;
+      }).join('')}
+    </div>
+    <div class="flex items-center justify-center gap-3 text-4xl mb-3">
+      <span>${ghPick[0] ? CROPS[ghPick[0]].emoji : '❔'}</span>
+      <span class="text-2xl text-slate-400">+</span>
+      <span>${ghPick[1] ? CROPS[ghPick[1]].emoji : '❔'}</span>
+      <span class="text-2xl text-slate-400">➡️</span>
+      <span id="gh-result">${recipe ? CROPS[recipe.result].emoji : '🧪'}</span>
+    </div>
+    <div class="text-center mb-4">
+      <button id="gh-breed" ${ghPick.length === 2 ? '' : 'disabled'}
+        class="btn-chunky bg-farm-leaf text-white px-6 py-2 ${ghPick.length === 2 ? '' : 'opacity-50'}">
+        🧬 Crossbreed (${CROSSBREED_COST}🪙)
+      </button>
+    </div>
+    <div class="info-card text-xs space-y-1">
+      <div class="font-display text-sm mb-1">🔬 Known Recipes</div>
+      ${recipeHints}
+    </div>`;
+
+  body.querySelectorAll('[data-parent]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.parent;
+    const i = ghPick.indexOf(id);
+    if (i >= 0) ghPick.splice(i, 1);        // toggle off
+    else { ghPick.push(id); if (ghPick.length > 2) ghPick.shift(); }
+    audio.click();
+    renderGreenhouse();
+  }));
+
+  $('gh-breed').onclick = () => {
+    if (ghPick.length !== 2) return;
+    const r = findCrossbreed(ghPick[0], ghPick[1]);
+    if (!r) {
+      audio.wrong();
+      toast('Those two don\'t mix… try another pair! 🧪', '❌');
+      return;
+    }
+    if (store.state.unlockedExotic[r.result]) {
+      toast(`${CROPS[r.result].name} is already unlocked!`, CROPS[r.result].emoji);
+      return;
+    }
+    if (!store.spend(CROSSBREED_COST)) { toast('Not enough coins!', '🪙'); return; }
+    // mixing animation: pulse the result, then reveal
+    const resEl = $('gh-result');
+    if (resEl) { resEl.classList.add('animate-pop'); }
+    const exotic = { ...store.state.unlockedExotic, [r.result]: true };
+    store.set({ unlockedExotic: exotic, activeSeed: r.result });
+    audio.levelUp();
+    const c = CROPS[r.result];
+    toast(`Unlocked ${c.name} seed! ${c.emoji}`, '🎉', 2600);
+    ghPick = [];
+    renderGreenhouse();
+    renderSeedPicker();
+    renderShop();
+  };
+}
+
+// ---------------------------------------------------------------
+//  BEEHIVE — collect honey to sell, or eat for a speed boost
+// ---------------------------------------------------------------
+function renderBeehive() {
+  const body = $('beehive-body');
+  const jars = store.state.inventory.honey || 0;
+  const boostLeft = Math.ceil(store.state.speedBoostTimer);
+  body.innerHTML = `
+    <p class="mb-3 text-slate-600 text-sm">Busy bees make a honey jar every 30 seconds (up to 3). 🐝</p>
+    <div class="text-center my-4">
+      <div class="text-5xl tracking-widest">${'🍯'.repeat(jars) || '🫙'}</div>
+      <div class="font-display text-lg mt-2">${jars} / 3 jars ready</div>
+      ${boostLeft > 0 ? `<div class="text-farm-sun font-bold text-sm mt-1">⚡ Speed boost active: ${boostLeft}s</div>` : ''}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <button id="honey-sell" ${jars >= 1 ? '' : 'disabled'}
+        class="btn-chunky bg-farm-sun text-slate-800 px-3 py-2 ${jars >= 1 ? '' : 'opacity-50'}">
+        💰 Sell a Jar (+50🪙)
+      </button>
+      <button id="honey-eat" ${jars >= 1 ? '' : 'disabled'}
+        class="btn-chunky bg-farm-leaf text-white px-3 py-2 ${jars >= 1 ? '' : 'opacity-50'}">
+        ⚡ Eat Honey (1.6x Speed 15s)
+      </button>
+    </div>`;
+
+  $('honey-sell').onclick = () => {
+    if ((store.state.inventory.honey || 0) < 1) return;
+    store.addItem('honey', -1);
+    gainCoins(50); gainXp(4);
+    toast('Sold a jar of honey! +50🪙', '🍯');
+    renderBeehive();
+  };
+  $('honey-eat').onclick = () => {
+    if ((store.state.inventory.honey || 0) < 1) return;
+    store.addItem('honey', -1);
+    store.set({ speedBoostTimer: 15 });
+    audio.levelUp();
+    toast('Yum! Super speed for 15s! ⚡', '🍯');
+    syncBoost();
+    renderBeehive();
+  };
 }
 
 // ---------------------------------------------------------------
@@ -597,11 +820,17 @@ export function initUI() {
   initInput();
   initToolbar();
   store.subscribe(syncHud);
+  store.subscribe(syncInventory);
   syncHud();
+  syncInventory();
   renderSeedPicker();
 
   // Handle animal level up celebration
   scene.hooks.onLevelUp = (lvl) => showLevelUp(lvl);
+  // Toast when bees finish a honey jar
+  scene.hooks.onHoney = (jars) => toast(`A bee made honey! 🍯 (${jars}/3)`, '🐝', 1600);
+  // Notify when the speed boost wears off
+  scene.hooks.onBoostEnd = () => { syncBoost(); toast('Speed boost ended', '🐌', 1200); };
 }
 
 // Called every frame from main to keep contextual hint fresh.
@@ -610,10 +839,14 @@ export function updateHints(dt) {
   hintThrottle += dt;
   if (hintThrottle < 0.15) return;
   hintThrottle = 0;
+  syncBoost();
   if (anyDialogOpen()) { hint(null); return; }
   const st = store.state;
   if (st.activeVehicle === 'foot' && isOnMat()) return hint('Press ✋ Act to Rest & start a new day');
   if (isNearWell()) return hint('Press ✋ Act to refill water');
+  if (isNearWindmill()) return hint('Press ✋ Act to use Windmill');
+  if (isNearGreenhouse()) return hint('Press ✋ Act to enter Greenhouse Lab');
+  if (isNearBeehive()) return hint('Press ✋ Act to collect Honey');
 
   // Check if near any animal (only on foot)
   if (st.activeVehicle === 'foot') {
@@ -640,9 +873,12 @@ export function updateHints(dt) {
 
 export function showGameUI() {
   $('hud').classList.remove('hidden');
+  $('hud-extra').classList.remove('hidden');
+  $('hud-extra').classList.add('flex');
   $('toolbar').classList.remove('hidden');
   $('joystick').classList.remove('hidden');
   $('seed-picker').classList.remove('hidden');
   setActiveToolbar(null);
+  syncInventory();
   syncTime();
 }

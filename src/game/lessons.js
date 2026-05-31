@@ -105,6 +105,58 @@ export const LESSONS = [
       },
     ],
   },
+  {
+    id: 'greenenergy',
+    title: 'Green Energy',
+    emoji: '🌬️',
+    color: '#5fb0d4',
+    reward: 35,
+    xp: 40,
+    slides: [
+      { emoji: '🌬️', title: 'The wind does work', text: 'A windmill catches moving air with big sails. The wind pushes them around and around for free!' },
+      { emoji: '⚙️', title: 'Spinning turns into power', text: 'The turning sails spin gears inside. Long ago they ground wheat into flour — today they can make electricity.' },
+      { emoji: '♻️', title: 'Renewable means it never runs out', text: 'Wind and sunshine are renewable — they come back every day. Using them keeps our air clean!' },
+    ],
+    quiz: [
+      {
+        q: 'What makes a windmill’s sails turn?',
+        options: ['The wind', 'A battery', 'A horse'],
+        answer: 0,
+        hint: 'It is moving air you can feel on your face!',
+      },
+      {
+        q: 'Why is wind power called "renewable"?',
+        options: ['It never runs out', 'It is very heavy', 'It only works at night'],
+        answer: 0,
+      },
+    ],
+  },
+  {
+    id: 'pollinators',
+    title: 'Pollinators & Bees',
+    emoji: '🐝',
+    color: '#f6c026',
+    reward: 35,
+    xp: 40,
+    slides: [
+      { emoji: '🐝', title: 'Busy little helpers', text: 'Bees fly from flower to flower to drink sweet nectar. Tiny yellow pollen sticks to their fuzzy bodies.' },
+      { emoji: '🌸', title: 'Pollination grows food', text: 'When a bee carries pollen between flowers, it helps plants make fruit and seeds. Many crops need bees!' },
+      { emoji: '🍯', title: 'Sweet honey reward', text: 'Back at the hive, bees turn nectar into honey to store for winter. We can share a little of it.' },
+    ],
+    quiz: [
+      {
+        q: 'What do bees carry between flowers to help plants?',
+        options: ['Pollen', 'Pebbles', 'Raindrops'],
+        answer: 0,
+        hint: 'It is a fine yellow powder.',
+      },
+      {
+        q: 'What sweet food do bees make in their hive?',
+        options: ['Honey', 'Butter', 'Jam'],
+        answer: 0,
+      },
+    ],
+  },
 ];
 
 export const getLesson = (id) => LESSONS.find((l) => l.id === id);

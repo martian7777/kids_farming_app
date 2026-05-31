@@ -34,7 +34,40 @@ export const CROPS = {
     seedCost: 50, reward: 160, xp: 70, growTime: 24, unlockLevel: 5,
     fact: 'The rare Golden Crop only grows for master farmers!',
   },
+  // ---- Exotic crops — unlocked ONLY by crossbreeding in the Greenhouse ----
+  space_tomato: {
+    id: 'space_tomato', name: 'Space Tomato', emoji: '🍅', color: 0xff3b6b,
+    seedCost: 40, reward: 130, xp: 60, growTime: 14, unlockLevel: 99, exotic: true,
+    fact: 'Astronauts really do grow tomatoes up in space!',
+  },
+  dino_melon: {
+    id: 'dino_melon', name: 'Dino Melon', emoji: '🍉', color: 0x57b85a,
+    seedCost: 45, reward: 150, xp: 65, growTime: 16, unlockLevel: 99, exotic: true,
+    fact: 'Some melons grow as big as a baby dinosaur!',
+  },
+  glow_mushroom: {
+    id: 'glow_mushroom', name: 'Glow Mushroom', emoji: '🍄', color: 0x7ad9ff,
+    seedCost: 55, reward: 180, xp: 80, growTime: 18, unlockLevel: 99, exotic: true,
+    fact: 'Real glowing mushrooms make their own light — bioluminescence!',
+  },
 };
+
+// ---- Greenhouse crossbreeding recipes -------------------------------
+// A pair of parent crop ids (order-independent) -> exotic crop unlocked.
+export const CROSSBREEDS = [
+  { parents: ['wheat', 'strawberry'], result: 'space_tomato' },
+  { parents: ['pumpkin', 'carrot'], result: 'dino_melon' },
+  { parents: ['golden', 'strawberry'], result: 'glow_mushroom' },
+];
+
+export const CROSSBREED_COST = 15;
+
+export function findCrossbreed(a, b) {
+  return CROSSBREEDS.find((r) =>
+    (r.parents[0] === a && r.parents[1] === b) ||
+    (r.parents[0] === b && r.parents[1] === a)
+  ) || null;
+}
 
 // ---- Vehicle definitions ---------------------------------------------
 export const VEHICLES = {
@@ -102,6 +135,15 @@ function defaultState() {
     vehicles: { foot: true, quad: false, tractor: false, truck: false },
     upgrades: { bigtank: false, sprinkler: false, fastseed: false },
     animals: { chicken: 0, sheep: 0, cow: 0 },
+    // Collected crops + produced goods (windmill/beehive)
+    inventory: {
+      wheat: 0, carrot: 0, strawberry: 0, pumpkin: 0, golden: 0,
+      space_tomato: 0, dino_melon: 0, glow_mushroom: 0,
+      organicFeed: 0, flour: 0, honey: 0,
+    },
+    // Which exotic crops have been crossbred & unlocked for planting
+    unlockedExotic: { space_tomato: false, dino_melon: false, glow_mushroom: false },
+    speedBoostTimer: 0,     // seconds of remaining honey speed boost
     lessons: {},            // lessonId -> { completed:true, medal:'gold'|'silver' }
     stats: { planted: 0, harvested: 0, watered: 0, lessonsDone: 0 },
   };
@@ -118,7 +160,17 @@ class Store {
   _load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return { ...defaultState(), ...JSON.parse(raw) };
+      if (raw) {
+        const def = defaultState();
+        const saved = JSON.parse(raw);
+        // Shallow merge, but deep-merge the nested maps so newly added
+        // keys (inventory items, exotic crops) are never missing.
+        return {
+          ...def, ...saved,
+          inventory: { ...def.inventory, ...(saved.inventory || {}) },
+          unlockedExotic: { ...def.unlockedExotic, ...(saved.unlockedExotic || {}) },
+        };
+      }
     } catch (_) { /* ignore corrupt saves */ }
     return defaultState();
   }
@@ -185,7 +237,19 @@ class Store {
     return this.state.upgrades.fastseed ? 0.75 : 1;
   }
 
-  isCropUnlocked(id) { return this.state.level >= CROPS[id].unlockLevel; }
+  isCropUnlocked(id) {
+    const crop = CROPS[id];
+    if (crop.exotic) return !!this.state.unlockedExotic[id];
+    return this.state.level >= crop.unlockLevel;
+  }
+
+  // ---- Inventory helpers ----
+  addItem(id, n = 1) {
+    const inv = { ...this.state.inventory };
+    inv[id] = Math.max(0, (inv[id] || 0) + n);
+    this.set({ inventory: inv });
+  }
+  hasItems(id, n = 1) { return (this.state.inventory[id] || 0) >= n; }
 }
 
 export const store = new Store();
